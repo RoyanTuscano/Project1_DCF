@@ -14,9 +14,9 @@ DEST : $(OFILES)
 
 main.o : global.h main.c 
 
-con_comm.o : con_comm.h con_comm.c 
+con_comm.o : global.h con_comm.h con_comm.c 
 
-hid_comm.o : hid_comm.h hid_comm.c 
+hid_comm.o : global.h hid_comm.h hid_comm.c 
 
 clean:
 	rm -f *.o 

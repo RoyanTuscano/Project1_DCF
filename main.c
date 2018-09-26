@@ -28,7 +28,7 @@ int main()
     print_slots(t_a, n_a_slots); //print t_a
     print_slots(t_c, n_c_slots); //print t_a
 
-    //CSMA_CA_hid_comm()
+    CSMA_CA_hid_comm(t_a,t_c,n_a_slots,n_c_slots);
 
     return 0;
 }
