@@ -3,12 +3,33 @@ link_num *head;
 
 int main()
 {
-    int Arate_1 = 50;
-    float slot_time = 0.00002;                      //this is in us for testing, to translate to slots
-    int n_a_slots=create_traffic(Arate_1, slot_time);
+    //initialize the important parameters
+    CW_0 = 4;
+    CW_max = 1024;
+    SIFS_duration = 0.5;
+    DIFS_duration = 2;
+
+    //t_a is traffice at slot A and t_b is traffic at slot B
+    int Arate_a[3] = {50, 100, 200, 300}; //Arrical rate
+    int Arate_c[3] = {50, 100, 200, 300};
+
+    slot_time = 0.00002; //this is in us for testing, to translate to slots
+
+    //For Station A
+    int n_a_slots = create_traffic(Arate_a[0], slot_time);
     int t_a[n_a_slots]; //array of slots generated at A
     store_slots(t_a);   ///store the heap values in stack of t_a
-    print_slots(t_a,n_a_slots);   //print t_a
+
+    //For station B
+    int n_c_slots = create_traffic(Arate_c[0], slot_time);
+    int t_c[n_c_slots];
+    store_slots(t_c);
+
+    print_slots(t_a, n_a_slots); //print t_a
+    print_slots(t_c, n_c_slots); //print t_a
+
+    //CSMA_CA_hid_comm()
+
     return 0;
 }
 
@@ -21,7 +42,7 @@ void store_slots(int *t)
         tmp = head;
         t[i++] = tmp->num;
         head = head->next;
-        free(tmp);  //free the heap
+        free(tmp); //free the heap
     }
 }
 
@@ -48,7 +69,7 @@ int create_traffic(int Arate, float slot_time)
             t_next->next = t_num;
 
         x_prev = x + x_prev;
-        
+
         t_num->num = (int)x_prev;
         t_num->next = NULL;
         t_next = t_num;
@@ -56,10 +77,11 @@ int create_traffic(int Arate, float slot_time)
     return i;
 }
 
-void print_slots(int *t ,int n)
+void print_slots(int *t, int n)
 {
-    for(int i=0;i<n; i++)
-    printf("%d, ",t[i]);
+    printf("\n");
+    for (int i = 0; i < n; i++)
+        printf("%d, ", t[i]);
 }
 
 float random_0_1()
