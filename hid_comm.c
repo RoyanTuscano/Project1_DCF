@@ -1,25 +1,295 @@
 /**************code for Hidden communication******************/
-
-int CSMA_CA_hid_comm(int *t_a, int *t_c, int n_a, int n_c)
+#include "hid_comm.h"
+//define  sim_slot = 100000;
+static int status[4][500000];
+static int NAV[2][500000];
+static int updt_slot[4][500000];
+static int frm_lst[4][500000];
+static int channel_s[2][500000];
+int CSMA_hid_comm(int *frm_slt1, int *frm_slt2, int a, int c)
 {
-    int t_global = 1; //global clock for concurrent network
-    int aFrame = 1;
-    int cFrame = 1;
-    int no_of_collision = 0;
-    for (; t_global < 10000; t_global++)
+    sim_slot = 500000;
+    // int *channel_s = malloc(sim_slot * sizeof(int));
+    int *frm_rcv_slot1 = malloc(1000 * sizeof(int));
+    int *frm_rcv_slot2 = malloc(1000 * sizeof(int));
+    int *frm_rcv_slot21 = malloc(1000 * sizeof(int));
+
+    initialize_array((int *)status, 4, sim_slot);
+    initialize_array((int *)NAV, 2, sim_slot);
+    initialize_array((int *)channel_s, 2, sim_slot);
+    // initialize_single_array(channel_s, sim_slot);
+    initialize_array((int *)updt_slot, 4, sim_slot);
+    OccupyChannel1 = 0;
+    OccupyChannel2 = 0;
+
+    int bck_of[2] = {0, 0};
+    int numberOfCollisions[2] = {0, 0};
+    int flag[2] = {0, 0};
+    int prev_back_off[2] = {0, 0};
+    int netf = 0;
+
+    int sendAck;
+    int noAck[2] = {0, 0};
+    int frm_rcv_num1 = 0;
+    int frm_rcv_num2 = 0;
+
+    int frm_rcv_num21 = 0;
+    initialize_array((int *)frm_lst, 4, sim_slot);
+    //  copy_slot_array((int *)frm_lst, 0, sim_slot, frm_slt1, a);
+    //  copy_slot_array((int *)frm_lst, 3, sim_slot, frm_slt2, c);
+    int s1, s2;
+
+    for (int i = 0; i < sim_slot; i++)
     {
-        //check if any frame is transmitting
-        if (t_a[aFrame] == t_global && t_c[cFrame] == t_global)  //this means there is collison
+        if (channel_s[0][i] == 0) //if the channel is free
         {
+            for (int s = 0; s < a; s++)
+            {
+                if (frm_slt1[s] != 0 && frm_lst[0][s] == 0 && i >= frm_slt1[s])
+                {
+                    status[0][i] = 1;
+                    s1 = s;
+                    break;
+                }
+            }
         }
-        else if (t_a[aFrame] <= t_global)                       //this means t_a[aFrame] is due to be sent
+        if (channel_s[1][i] == 0) //if the channel is free
         {
+            for (int s = 0; s < c; s++)
+            {
+                if (frm_slt2[s] != 0 && frm_lst[2][s] == 0 && i >= frm_slt2[s])
+                {
+                    status[1][i] = 1;
+                    s2 = s;
+                    break;
+                }
+            }
         }
-        else if (t_c[cFrame] <= t_global)                       //this means t_c[cFrame] is due to be sent
+        for (int len = 0; len < 2; len++)
         {
-        }
-        else
-        {
+            int i_prev, i_next;
+            if (i != 0)
+            {
+                i_prev = i - 1;
+                i_next = i + 1;
+            }
+            else
+            {
+                i_prev = 0;
+                i_next = i + 1;
+            }
+            if (status[len][i] == 1 && channel_s[len][i] == 0 && updt_slot[len][i_prev] == 0 && updt_slot[len][i] == 0 && bck_of[len] == 0)
+            {
+                // proceed the slot by the slot length of DIFS. i is the slot number you are simulating.
+                // Update such that the node is undergoing the DIFS slots.
+                occupy_slot_2dem((int *)updt_slot, len, i_next, i + difs_slot, sim_slot, 1);
+                // Update such that the node still wants to send the frame after it will be completing the DIFS time in the future.
+                occupy_slot_2dem((int *)status, len, i_next, i + difs_slot, sim_slot, 1);
+            }
+            // if sender has the packet, Channel is idle, sender finished the DIFS slot (updt_slot(len,i - 1) == 1  && updt_slot(len,i) == 0)
+            // and the back off time is not yet completed.
+            else if (status[len][i] == 1 && channel_s[len][i] == 0 && updt_slot[len][i_prev] == 1 && updt_slot[len][i] == 0 && bck_of[len] == 0)
+            {
+                //This code is to choose the back off for Node-1, given that it has not undergone any recent collision (doubleCW(1) == 0).
+                if (len == 0)
+                {
+                    nwcw1 = pow(2, numberOfCollisions[len]);
+                    if (numberOfCollisions[len] > 10)
+                        cw1 = 1024;
+                    else
+                        cw1 = rand() % (nwcw1 * cw0);
+                    occupy_slot_2dem((int *)status, len, i_next, i + cw1, sim_slot, 1);
+                    bck_of[len] = 1;
+                }
+                else if (len == 1) // The following lines of code are for Node-2, given that it has not undergone any recent collision (doubleCW(1) == 0).
+                {
+                    nwcw2 = pow(2, numberOfCollisions[len]);
+                    if (numberOfCollisions[len] > 10)
+                        cw2 = 1024;
+                    else
+                        cw2 = rand() % (nwcw2 * cw0);
+                    occupy_slot_2dem((int *)status, len, i_next, i + cw2, sim_slot, 1);
+                    bck_of[len] = 1;
+                }
+            }
+            // Node has some data to send to the receiver. Channel is idle/free and the node is in back off period.
+            else if (status[len][i] == 1 && channel_s[len][i] == 0 && bck_of[len] == 1 && flag[len] == 0)
+            {
+                if (len == 0)
+                {
+                    if (cw1 > 0)
+                    {
+                        // Reduce the back off until it becomes 0. cw1 is the back off for Node - 1
+                        cw1 = cw1 - 1;
+                        //proceed the time slot by 1
+                        status[len][i_next] = 1;
+                    }
+                    if (cw1 == 0)
+                    {
+                        flag[len] = 1;
+                        bck_of[len] = 0;
+                        prev_back_off[len] = 1;
+                        occupy_slot_2dem((int *)status, len, i_next, i + frame_slot, sim_slot, 1);
+                        netf = flag[0] || flag[1];
+                    }
+                }
+                else if (len == 1)
+                {
+                    if (cw2 > 0)
+                    {
+                        cw2 = cw2 - 1;
+                        status[len][i_next] = 1;
+                    }
+                    if (cw2 == 0)
+                    {
+                        flag[len] = 1;
+                        bck_of[len] = 0;
+                        prev_back_off[len] = 1;
+                        occupy_slot_2dem((int *)status, len, i_next, i + frame_slot, sim_slot, 1);
+                        netf = flag[0] || flag[1];
+                    }
+                }
+                if (netf == 1)
+                {
+                    // This indicates only node 1 is sending. It has won the channel as node 2 is not sending the data anymore.
+                    if (flag[0] == 1)
+                        occupy_slot_2dem((int *)status, 0, i, i + frame_slot + sifs_slot + ack_slot + 1, sim_slot, 1);
+                    else if (flag[1] == 1)
+                        occupy_slot_2dem((int *)status, 1, i, i + frame_slot + sifs_slot + ack_slot + 1, sim_slot, 1);
+                }
+            }
+            else if (status[len][i] == 1 && bck_of[len] == 0 && prev_back_off[len] == 1 && flag[len] == 1)
+            {
+                occupy_slot_2dem((int *)channel_s, len, i, i + frame_slot + sifs_slot + ack_slot, sim_slot, 1);
+                prev_back_off[len] = 0;
+
+                NAV[len][i] = frame_slot + sifs_slot + ack_slot; // Define the length of the transmission.
+                NAV[len][i_next] = NAV[len][i] - 1;              // Reduce the NAV by 1 in each iteration once the transmission has started.
+                occupy_slot_2dem((int *)status, len, i_next, i + frame_slot, sim_slot, 1);
+
+                flag[len] = 0;
+            }
+            else if (channel_s[len][i] == 1 && (NAV[len][i] > sifs_slot + ack_slot))
+            {
+                NAV[len][i_next] = NAV[len][i] - 1;           // Reduce NAV by 1
+                if (NAV[len][i_next] == sifs_slot + ack_slot) // After completion of transmission of the data frame
+                    if (status[0][i] == 1 && len == 0)
+                    {
+                        occupy_slot_2dem((int *)status, 2, i, i + sifs_slot + ack_slot, sim_slot, 1); // Node-3 (Node B, the receiver) has to send the ACK
+                    }
+                    else if (status[1][i] == 1 && len == 1)
+                    {
+                        occupy_slot_2dem((int *)status, 3, i, i + sifs_slot + ack_slot, sim_slot, 1); // Node-3 (Node B, the receiver) has to send the ACK
+                    }
+            }
+            else if (channel_s[len][i] == 1 && (status[2][i] == 1 || status[3][i] == 1) && NAV[len][i] > ack_slot)
+                NAV[len][i_next] = NAV[len][i] - 1; //Reduce NAV by 1 until the completion of the SIFS time.
+            else if (channel_s[len][i] == 1 && (status[2][i] == 1 || status[3][i] == 1) && NAV[len][i] == ack_slot)
+            {
+                if (noAck[len] == 1) // If no ACK, do nothing.
+                {
+                    NAV[len][i_next] = NAV[len][i] - 2; // Reduce NAV by 1.
+                    noAck[len] = 0;
+                }
+                else
+                {
+                    sendAck = 1;                        // Set sendACK flag as 1.
+                    NAV[len][i_next] = NAV[len][i] - 1; // Reduce NAV by 1.
+                }
+            }
+            else if (channel_s[len][i] == 1 && (status[2][i] == 1 || status[3][i] == 1) && NAV[len][i] == 1)
+            {
+                if (status[2][i] == 1)
+                {
+                    if (sendAck == 1)
+                    {
+                        // printf("%i, ", i);
+                        frm_rcv_slot1[frm_rcv_num1++] = i;
+                        frm_lst[0][s1] = 1;
+                        sendAck = 0;
+                        netf = 0;
+                        flag[0] = 0;
+                        occupy_slot_2dem((int *)status, 0, i, sim_slot, sim_slot, 0);
+                    }
+                }
+                else if (status[3][i] == 1)
+                {
+                    if (sendAck == 1)
+                    {
+                        frm_rcv_slot2[frm_rcv_num2++] = i;
+                        frm_rcv_slot21[frm_rcv_num21++] = s2;
+                        frm_lst[2][s2] = 1;
+                        sendAck = 0;
+                        netf = 0;
+                        flag[1] = 0;
+                        occupy_slot_2dem((int *)status, 1, i, sim_slot, sim_slot, 0);
+                    }
+                }
+                NAV[len][i] = NAV[len][i] - 1; // Reduce the NAV by 1.
+            }
+
+            if (status[3][i] == 0 && status[4][i] == 0)
+            {
+                if (channel_s[0][i] == 1 && channel_s[1][i] == 1)
+                {
+                    if (noAck[0] == 0 && noAck[1] == 0)
+                    {
+                        noAck[0] = 1;                                      // Raise the flag such that it should not send any ACK
+                        noAck[1] = 1;                                      // Raise the flag such that it should not send any ACK
+                        numberOfCollisions[0] = numberOfCollisions[0] + 1; // Increment the number of collisions by 1
+                        numberOfCollisions[1] = numberOfCollisions[1] + 1; // Increment the number of collisions by 1
+                    }
+                }
+            }
+            else if (status[3][i] == 1 && status[4][i] == 0)
+            {
+                if (channel_s[0][i] == 1 && channel_s[1][i] == 1)
+                {
+                    if (sendAck == 1)
+                        if (noAck[1] == 0)
+                        {                                                      // Raise the flag such that it should not send any ACK
+                            noAck[1] = 1;                                      // Raise the flag such that it should not send any ACK
+                            numberOfCollisions[1] = numberOfCollisions[1] + 1; // Increment the number of collisions by 1
+                        }
+                }
+            }
+            else if (status[3][i] == 0 && status[4][i] == 1)
+            {
+                if (channel_s[0][i] == 1 && channel_s[1][i] == 1)
+                {
+                    if (sendAck == 1)
+                        if (noAck[0] == 0)
+                        {                                                      // Raise the flag such that it should not send any ACK
+                            noAck[0] = 1;                                      // Raise the flag such that it should not send any ACK
+                            numberOfCollisions[1] = numberOfCollisions[1] + 1; // Increment the number of collisions by 1
+                        }
+                }
+            }
         }
     }
+    //  numberOfCollisions;
+    numberOfSuccess1 = sum_array_elements((int *)frm_lst, 0, sim_slot);
+    numberOfSuccess2 = sum_array_elements((int *)frm_lst, 2, sim_slot);
+    printf("numberOfSuccess1 %i\n", numberOfSuccess1);
+    printf("numberOfSuccess2 %i\n", numberOfSuccess2);
+    printf("numberOfCollisions1 %i\n", numberOfCollisions[0]);
+    printf("numberOfCollisions2 %i\n", numberOfCollisions[1]);
+    printf("OccupyChannel1 %f\n", OccupyChannel1);
+    printf("OccupyChannel2 %f\n", OccupyChannel2);
+    OccupyChannel1 = numberOfSuccess1 * 103;
+    OccupyChannel2 = numberOfSuccess2 * 103;
+    Throughput1 = ((numberOfSuccess1)*1500 * 8 / 10);
+    Throughput2 = ((numberOfSuccess2)*1500 * 8 / 10);
+    printf("Throughput1 %f\n", Throughput1);
+    printf("Throughput2 %f\n", Throughput2);
+    FI = OccupyChannel1 / OccupyChannel2;
+    printf("fairness Index %f ", FI);
+   // free(channel_s);
+    free(frm_rcv_slot1);
+    free(frm_rcv_slot2);
+    free(frm_rcv_slot21);
+    free(frm_slt1);
+    free(frm_slt2);
+
+    return;
 }
