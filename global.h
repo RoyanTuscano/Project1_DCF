@@ -49,6 +49,8 @@ float Throughput1, Throughput2;
 
 int CSMA_con_comm(int *t_a, int *t_c, int n_a, int n_c);
 int CSMA_hid_comm(int *t_a, int *t_c, int n_a, int n_c);
+int CSMA_con_CA_comm(int *frm_slt1, int *frm_slt2, int a, int c);
+int CSMA_hid_CA_comm(int *t_a, int *t_c, int n_a, int n_c);
 
 
 void store_slots(int *t);

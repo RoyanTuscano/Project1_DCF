@@ -54,6 +54,8 @@ int main()
 
     CSMA_con_comm(t_a, t_c, n_a_slots, n_c_slots);
     CSMA_hid_comm(t_a, t_c, n_a_slots, n_c_slots);
+    CSMA_con_CA_comm(t_a, t_c, n_a_slots, n_c_slots);
+    CSMA_hid_CA_comm(t_a, t_c, n_a_slots, n_c_slots);
 
     return 0;
 }
